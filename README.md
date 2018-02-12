@@ -1,2 +1,2 @@
 # alertmanager
-Items for use with prometheus AlertManager
+Items for use with Prometheus AlertManager
