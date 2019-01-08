@@ -14,12 +14,14 @@ require 'io/console'
 ##################################################################
 
 # -u,--url url_to_alertmanager
-# -c,--context context_name
+# -c,--context cluster_name
 # -h,--help
 
-$CONTEXT_NAME = ""
+$CLUSTER_NAME = ""
 $BASE_URL = ""
 $FULL_URL = ""
+$USERNAME = "prometheus"
+$PASSWORD = ""
 
 ##################################################################
 #### METHODS #####################################################
@@ -30,9 +32,9 @@ def getOptions(options) ####
     $stderr.sync = true
 
     # default options
-    context_name = "cluster1"
+    cluster_name = "cluster1"
     base_url = "k8s.example.com"
-    full_url = "#{context_name}.#{base_url}"
+    endpoint_url = "#{cluster_name}.#{base_url}"
 
     # parse arguments
     ARGV.options do |opts|
@@ -41,17 +43,22 @@ def getOptions(options) ####
       opts.separator ""
       opts.separator "Specific options:"
 
-      opts.on("-u", "--url FULL_URL", "Specify the full URL for Alert Manager if the base domain is different than the default") do |val|
+      opts.on("-e", "--endpoint ENDPOINT_URL", "Specify the full endpoint URL for Alert Manager if the base domain is different than the default") do |val|
 
-        full_url = val
+        endpoint_url = val
         regex = /alertmanager\.(.*?)\.[example\.com|example\.org|example\.net]/
-        context_name = "#{full_url.slice(regex, 1)}"
+        cluster_name = "#{endpoint_url.slice(regex, 1)}"
 
       end
-      opts.on("-c", "--context CONTEXT_NAME", "Specify the context to work in. This assumes the default base domain: \"#{base_url}\"") do |val|
+      opts.on("-c", "--cluster CLUSTER_NAME", "Specify the cluster to work in. This assumes the default base domain: \"#{base_url}\"") do |val|
 
-        context_name = val
-        full_url = "alertmanager.#{context_name}.#{base_url}"
+        cluster_name = val
+        endpoint_url = "alertmanager.#{cluster_name}.#{base_url}"
+
+      end
+      opts.on("-u", "--user USERNAME", "Specify the username of for the AlertManager Instance.") do |val|
+
+        $USERNAME = val
 
       end
 
@@ -68,21 +75,28 @@ def getOptions(options) ####
     end
 
     # DEBUG
-    warn "ARGV:     #{ARGV.inspect}"
-    warn "full_url:     #{full_url.inspect}"
-    warn "context_name:     #{context_name.inspect}"
+    #warn "ARGV:         #{ARGV.inspect}"
+    #warn "endpoint_url:     #{endpoint_url.inspect}"
+    #warn "cluster_name: #{cluster_name.inspect}"
 
     puts "####################################################################"
-    puts "Working Context: \"#{context_name}\""
-    puts "Alert Manager URL: \"#{full_url}\""
+    puts "Working Cluster: \"#{cluster_name}\""
+    puts "Alert Manager URL: \"#{endpoint_url}\""
     puts "####################################################################"
     puts
 
-    $CONTEXT_NAME = "#{context_name}"
-    $FULL_URL = "#{full_url}"
+    $CLUSTER_NAME = "#{cluster_name}"
+    $FULL_URL = "#{endpoint_url}"
 
 end #### getOptions
 
+def getPasswd ####
+
+  puts "Enter Password for AlertManager user \"#{$USERNAME}\":"
+  puts
+  $PASSWORD = STDIN.noecho(&:gets).chomp
+
+end #### getPassword
 
 def continueNow
 
@@ -125,6 +139,7 @@ def sendAlert(context, url) ####
     http.verify_mode = OpenSSL::SSL::VERIFY_NONE
     firing = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
     firing.body = "#{alert_json}"
+    firing.basic_auth("#{$USERNAME}","#{$PASSWORD}")
 
     response = http.request(firing)
 
@@ -161,6 +176,7 @@ def sendAlert(context, url) ####
     http.verify_mode = OpenSSL::SSL::VERIFY_NONE
     resolved = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
     resolved.body = "#{alert_json}"
+    resolved.basic_auth("#{$USERNAME}","#{$PASSWORD}")
 
     response = http.request(resolved)
 
@@ -176,5 +192,5 @@ end #### sendAlert
 ##################################################################
 
 arrayOptions = getOptions(ARGV)
-sendAlert($CONTEXT_NAME,$FULL_URL)
-
+getPasswd
+sendAlert($CLUSTER_NAME,$FULL_URL)
